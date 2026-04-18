@@ -1,31 +1,33 @@
-## Root controller: wires the PTYNode (GDExtension) to the TerminalScreen.
+## Root controller: wires PTYSocket (Python bridge) to the TerminalScreen.
 ## Handles keyboard input translation and window resize.
 extends Control
 
 const COLS := 80
 const ROWS := 24
 
-@onready var screen: TerminalScreen = $TerminalScreen
-@onready var pty: PTYNode           = $PTYNode
+# PTYSocket implements the same open/write/resize/close_pty/is_open surface
+# as the C++ PTYNode, so switching backends only requires changing this node.
+@onready var screen : TerminalScreen = $TerminalScreen
+@onready var pty    : Node           = $PTYNode
 
 
 func _ready() -> void:
-	# Let the screen fill the window while keeping terminal proportions
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	pty.data_received.connect(_on_data)
 	pty.exited.connect(_on_exited)
 	screen.cursor_position_changed.connect(_on_cursor_moved)
 
-	# Report cursor position reply goes back to the PTY
 	var shell := OS.get_environment("SHELL")
 	if shell == "":
 		shell = "/bin/bash"
+
 	var pid := pty.open(COLS, ROWS, shell)
 	if pid < 0:
-		push_error("PTYNode.open() failed — is the GDExtension compiled?")
+		push_error("PTY backend failed to start.")
 		return
 
+	get_tree().root.size_changed.connect(_on_window_resized)
 	screen.grab_focus()
 
 
@@ -39,7 +41,26 @@ func _on_exited(exit_code: int) -> void:
 
 
 func _on_cursor_moved(_row: int, _col: int) -> void:
-	pass  # extend here for status-bar cursor display
+	pass
+
+
+func _on_window_resized() -> void:
+	# Recompute cols/rows from the window size and the cell metrics the
+	# TerminalScreen set up, then notify both the renderer and the PTY.
+	var cw : float = screen._cell_w
+	var ch : float = screen._cell_h
+	if cw <= 0 or ch <= 0:
+		return
+	var new_cols := int(size.x / cw)
+	var new_rows := int(size.y / ch)
+	if new_cols < 2: new_cols = 2
+	if new_rows < 2: new_rows = 2
+	screen.cols = new_cols
+	screen.rows = new_rows
+	screen.scroll_bot = new_rows - 1
+	screen._init_grid()
+	screen.custom_minimum_size = Vector2(new_cols * cw, new_rows * ch)
+	pty.resize(new_cols, new_rows)
 
 
 # ── Keyboard input ────────────────────────────────────────────────────────────
@@ -56,7 +77,7 @@ func _unhandled_key_input(event: InputEventKey) -> void:
 func _key_to_bytes(event: InputEventKey) -> PackedByteArray:
 	var data := PackedByteArray()
 
-	# Ctrl+letter → send control character (0x01–0x1A)
+	# Ctrl+letter → control character (0x01–0x1A)
 	if event.ctrl_pressed and not event.alt_pressed:
 		var k := event.keycode
 		if k >= KEY_A and k <= KEY_Z:
@@ -68,13 +89,13 @@ func _key_to_bytes(event: InputEventKey) -> PackedByteArray:
 			KEY_BRACKETRIGHT: data.append(0x1D); return data
 			KEY_MINUS:        data.append(0x1F); return data
 
-	# Special keys → VT/xterm escape sequences
+	# Special / function keys → VT/xterm sequences
 	match event.keycode:
 		KEY_ENTER, KEY_KP_ENTER: data.append(13)
 		KEY_BACKSPACE:           data.append(127)
 		KEY_TAB:
 			if event.shift_pressed:
-				data.append_array([0x1B, 0x5B, 0x5A])  # Shift+Tab = CSI Z
+				data.append_array([0x1B, 0x5B, 0x5A])
 			else:
 				data.append(9)
 		KEY_ESCAPE:   data.append(0x1B)
