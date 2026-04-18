@@ -8,10 +8,6 @@
 class_name PTYSocket
 extends Node
 
-# 6-byte resize command prefix understood by pty_bridge.py
-# Format: \x00 R <cols_hi> <cols_lo> <rows_hi> <rows_lo>
-const _RESIZE_MAGIC := PackedByteArray([0x00, 0x52])
-
 const _HOST        := "127.0.0.1"
 const _CONNECT_TRIES := 40    # × 75 ms = 3 s timeout
 const _POLL_INTERVAL := 0.016 # seconds (~60 fps)
@@ -63,10 +59,11 @@ func write(data: PackedByteArray) -> void:
 
 
 ## Sends a resize command to the bridge (cols × rows).
+## Protocol: \x00 R <cols_hi> <cols_lo> <rows_hi> <rows_lo>
 func resize(cols: int, rows: int) -> void:
 	if not _connected:
 		return
-	var msg := _RESIZE_MAGIC.duplicate()
+	var msg := PackedByteArray([0x00, 0x52])
 	msg.append((cols >> 8) & 0xFF)
 	msg.append(cols & 0xFF)
 	msg.append((rows >> 8) & 0xFF)
