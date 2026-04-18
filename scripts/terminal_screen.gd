@@ -29,10 +29,11 @@ const ANSI_BRIGHT: Array[Color] = [
 ]
 
 # ── Cell ─────────────────────────────────────────────────────────────────────
+# Inner classes cannot reference outer-class constants, so colours are literals.
 class Cell:
 	var ch:        String = " "
-	var fg:        Color  = DEFAULT_FG
-	var bg:        Color  = DEFAULT_BG
+	var fg:        Color  = Color(0.85, 0.85, 0.85)
+	var bg:        Color  = Color(0.08, 0.08, 0.08)
 	var bold:      bool   = false
 	var italic:    bool   = false
 	var underline: bool   = false
@@ -65,25 +66,20 @@ var _blink_timer: float = 0.0
 var _parser: ANSIParser = ANSIParser.new()
 
 # ── Font metrics (set via set_font_metrics) ───────────────────────────────────
-var _font:        Font  = null
-var _font_size:   int   = 16
-var _cell_w:      float = 9.0
-var _cell_h:      float = 20.0
-var _baseline:    float = 16.0   # ascent offset within the cell
+var _font:      Font  = null
+var _font_size: int   = 16
+var _cell_w:    float = 9.0
+var _cell_h:    float = 20.0
+var _baseline:  float = 16.0   # ascent offset within the cell
 
 signal cursor_position_changed(row: int, col: int)
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-func _init(c: int = 80, r: int = 24) -> void:
-	cols = c
-	rows = r
-	scroll_bot = r - 1
-	_init_grid()
-
-
 func _ready() -> void:
 	focus_mode = Control.FOCUS_ALL
+	scroll_bot = rows - 1
+	_init_grid()
 	_setup_font()
 
 
@@ -91,8 +87,8 @@ func set_font_metrics(font: Font, size: int) -> void:
 	_font = font
 	_font_size = size
 	var test_size := font.get_string_size("M", HORIZONTAL_ALIGNMENT_LEFT, -1, size)
-	_cell_w  = test_size.x
-	_cell_h  = font.get_height(size)
+	_cell_w   = test_size.x
+	_cell_h   = font.get_height(size)
 	_baseline = font.get_ascent(size)
 	custom_minimum_size = Vector2(cols * _cell_w, rows * _cell_h)
 	queue_redraw()
@@ -104,7 +100,7 @@ func feed(data: PackedByteArray) -> void:
 	queue_redraw()
 
 
-# ── Input ─────────────────────────────────────────────────────────────────────
+# ── Blink ─────────────────────────────────────────────────────────────────────
 
 func _process(delta: float) -> void:
 	_blink_timer += delta
@@ -133,7 +129,9 @@ func _draw() -> void:
 			var fg: Color = cell.fg
 			var bg: Color = cell.bg
 			if cell.inverse or _attr_inverse:
-				var tmp := fg; fg = bg; bg = tmp
+				var tmp := fg
+				fg = bg
+				bg = tmp
 
 			var x := col * _cell_w
 			var y := row * _cell_h
@@ -190,32 +188,58 @@ func _blank_cell() -> Cell:
 
 func _handle(a: Dictionary) -> void:
 	match a["type"]:
-		"print":   _put_char(a["char"])
-		"cr":      cursor_col = 0
-		"lf":      _line_feed()
-		"bs":      if cursor_col > 0: cursor_col -= 1
-		"tab":     cursor_col = mini((cursor_col / 8 + 1) * 8, cols - 1)
-		"bel":     pass  # TODO: visual bell
-		"cuu":     cursor_row = maxi(scroll_top, cursor_row - a["n"])
-		"cud":     cursor_row = mini(scroll_bot, cursor_row + a["n"])
-		"cuf":     cursor_col = mini(cols - 1,   cursor_col + a["n"])
-		"cub":     cursor_col = maxi(0,           cursor_col - a["n"])
-		"cnl":     cursor_row = mini(rows - 1, cursor_row + a["n"]); cursor_col = 0
-		"cpl":     cursor_row = maxi(0,           cursor_row - a["n"]); cursor_col = 0
-		"cha":     cursor_col = clampi(a["col"] - 1, 0, cols - 1)
+		"print":
+			_put_char(a["char"])
+		"cr":
+			cursor_col = 0
+		"lf":
+			_line_feed()
+		"bs":
+			if cursor_col > 0:
+				cursor_col -= 1
+		"tab":
+			cursor_col = mini((cursor_col / 8 + 1) * 8, cols - 1)
+		"bel":
+			pass
+		"cuu":
+			cursor_row = maxi(scroll_top, cursor_row - a["n"])
+		"cud":
+			cursor_row = mini(scroll_bot, cursor_row + a["n"])
+		"cuf":
+			cursor_col = mini(cols - 1, cursor_col + a["n"])
+		"cub":
+			cursor_col = maxi(0, cursor_col - a["n"])
+		"cnl":
+			cursor_row = mini(rows - 1, cursor_row + a["n"])
+			cursor_col = 0
+		"cpl":
+			cursor_row = maxi(0, cursor_row - a["n"])
+			cursor_col = 0
+		"cha":
+			cursor_col = clampi(a["col"] - 1, 0, cols - 1)
 		"cup":
 			cursor_row = clampi(a["row"] - 1, 0, rows - 1)
 			cursor_col = clampi(a["col"] - 1, 0, cols - 1)
-		"ed":      _erase_display(a["n"])
-		"el":      _erase_line(a["n"])
-		"il":      _insert_lines(a["n"])
-		"dl":      _delete_lines(a["n"])
-		"dch":     _delete_chars(a["n"])
-		"ich":     _insert_chars(a["n"])
-		"ech":     _erase_chars(a["n"])
-		"su":      _scroll_up(a["n"])
-		"sd":      _scroll_down(a["n"])
-		"sgr":     _apply_sgr(a["params"])
+		"ed":
+			_erase_display(a["n"])
+		"el":
+			_erase_line(a["n"])
+		"il":
+			_insert_lines(a["n"])
+		"dl":
+			_delete_lines(a["n"])
+		"dch":
+			_delete_chars(a["n"])
+		"ich":
+			_insert_chars(a["n"])
+		"ech":
+			_erase_chars(a["n"])
+		"su":
+			_scroll_up(a["n"])
+		"sd":
+			_scroll_down(a["n"])
+		"sgr":
+			_apply_sgr(a["params"])
 		"sc":
 			saved_cursor = Vector2i(cursor_col, cursor_row)
 		"rc":
@@ -225,12 +249,18 @@ func _handle(a: Dictionary) -> void:
 			scroll_top = clampi(a["top"] - 1, 0, rows - 1)
 			scroll_bot = a["bot"] if a["bot"] > 0 else rows - 1
 			scroll_bot = clampi(scroll_bot, scroll_top, rows - 1)
-			cursor_col = 0; cursor_row = 0
-		"ri":      _reverse_index()
-		"reset":   _full_reset()
-		"dsr":     pass  # cursor position report handled by terminal.gd
-		"sm":      _set_mode(a["params"], a["private"], true)
-		"rm":      _set_mode(a["params"], a["private"], false)
+			cursor_col = 0
+			cursor_row = 0
+		"ri":
+			_reverse_index()
+		"reset":
+			_full_reset()
+		"dsr":
+			pass
+		"sm":
+			_set_mode(a["params"], a["private"], true)
+		"rm":
+			_set_mode(a["params"], a["private"], false)
 
 	cursor_position_changed.emit(cursor_row, cursor_col)
 
@@ -277,11 +307,11 @@ func _scroll_down(n: int) -> void:
 
 func _erase_display(mode: int) -> void:
 	match mode:
-		0:  # from cursor to end
+		0:
 			_erase_region(cursor_row, cursor_col, rows - 1, cols - 1)
-		1:  # from start to cursor
+		1:
 			_erase_region(0, 0, cursor_row, cursor_col)
-		2, 3:  # entire screen
+		2, 3:
 			_erase_region(0, 0, rows - 1, cols - 1)
 
 
@@ -294,7 +324,7 @@ func _erase_line(mode: int) -> void:
 			for c in range(cursor_col + 1):
 				grid[cursor_row][c] = _blank_cell()
 		2:
-			for c in cols:
+			for c in range(cols):
 				grid[cursor_row][c] = _blank_cell()
 
 
@@ -350,9 +380,12 @@ func _apply_sgr(params: Array) -> void:
 		var p: int = params[i]
 		match p:
 			0:
-				_cur_fg = DEFAULT_FG; _cur_bg = DEFAULT_BG
-				_attr_bold = false; _attr_italic = false
-				_attr_underline = false; _attr_inverse = false
+				_cur_fg = DEFAULT_FG
+				_cur_bg = DEFAULT_BG
+				_attr_bold = false
+				_attr_italic = false
+				_attr_underline = false
+				_attr_inverse = false
 			1: _attr_bold      = true
 			3: _attr_italic    = true
 			4: _attr_underline = true
@@ -367,7 +400,8 @@ func _apply_sgr(params: Array) -> void:
 					_cur_fg = ANSI_BRIGHT[p - 30]
 			38:
 				if i + 2 < params.size() and params[i + 1] == 5:
-					_cur_fg = _color256(params[i + 2]); i += 2
+					_cur_fg = _color256(params[i + 2])
+					i += 2
 				elif i + 4 < params.size() and params[i + 1] == 2:
 					_cur_fg = Color(params[i+2]/255.0, params[i+3]/255.0, params[i+4]/255.0)
 					i += 4
@@ -376,7 +410,8 @@ func _apply_sgr(params: Array) -> void:
 				_cur_bg = ANSI_NORMAL[p - 40]
 			48:
 				if i + 2 < params.size() and params[i + 1] == 5:
-					_cur_bg = _color256(params[i + 2]); i += 2
+					_cur_bg = _color256(params[i + 2])
+					i += 2
 				elif i + 4 < params.size() and params[i + 1] == 2:
 					_cur_bg = Color(params[i+2]/255.0, params[i+3]/255.0, params[i+4]/255.0)
 					i += 4
@@ -403,20 +438,26 @@ func _color256(idx: int) -> Color:
 # ── Mode flags ────────────────────────────────────────────────────────────────
 
 func _set_mode(params: Array, private_mode: bool, enable: bool) -> void:
-	for p: int in params:
+	for p in params:
 		if private_mode:
 			match p:
-				25: _show_cursor = enable  # DECTCEM
+				25:
+					_show_cursor = enable  # DECTCEM
 
 
 # ── Reset ─────────────────────────────────────────────────────────────────────
 
 func _full_reset() -> void:
-	cursor_col = 0; cursor_row = 0
-	scroll_top = 0; scroll_bot = rows - 1
-	_cur_fg = DEFAULT_FG; _cur_bg = DEFAULT_BG
-	_attr_bold = false; _attr_italic = false
-	_attr_underline = false; _attr_inverse = false
+	cursor_col = 0
+	cursor_row = 0
+	scroll_top = 0
+	scroll_bot = rows - 1
+	_cur_fg = DEFAULT_FG
+	_cur_bg = DEFAULT_BG
+	_attr_bold = false
+	_attr_italic = false
+	_attr_underline = false
+	_attr_inverse = false
 	_init_grid()
 
 
@@ -424,7 +465,6 @@ func _full_reset() -> void:
 
 func _setup_font() -> void:
 	var sf := SystemFont.new()
-	# Try common monospace fonts; fall back to whatever the system provides
 	sf.font_names = PackedStringArray([
 		"JetBrains Mono", "Fira Code", "Cascadia Code",
 		"Cascadia Mono", "Hack", "Source Code Pro",
