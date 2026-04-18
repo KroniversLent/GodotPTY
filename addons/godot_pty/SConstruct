@@ -1,0 +1,29 @@
+#!/usr/bin/env python
+"""
+SConstruct for the GodotPTY GDExtension.
+Run from addons/godot_pty/:
+    scons platform=linux target=template_debug
+"""
+import os
+
+# Build godot-cpp and inherit its environment
+env = SConscript("godot-cpp/SConstruct")
+
+# C++17 for std::thread / std::atomic
+env.Append(CXXFLAGS=["-std=c++17"])
+env.Append(CPPPATH=["src/"])
+
+# PTY support requires linking against libutil on Linux
+if env["platform"] == "linux":
+    env.Append(LIBS=["util"])
+
+sources = [
+    "src/register_types.cpp",
+    "src/pty_node.cpp",
+]
+
+# Output path mirrors the .gdextension [libraries] entries
+lib_name = "libgodotpty{}{}".format(env["suffix"], env["SHLIBSUFFIX"])
+library = env.SharedLibrary("bin/" + lib_name, source=sources)
+
+Default(library)

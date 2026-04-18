@@ -1,0 +1,21 @@
+# Godot
+.godot/
+*.import
+export_presets.cfg
+
+# GDExtension build artifacts
+addons/godot_pty/bin/*.so
+addons/godot_pty/bin/*.dll
+addons/godot_pty/bin/*.dylib
+addons/godot_pty/bin/*.framework/
+addons/godot_pty/.scons_cache/
+addons/godot_pty/.sconsign.dblite
+addons/godot_pty/godot-cpp/
+
+# SCons
+*.pyc
+.sconsign.dblite
+
+# OS
+.DS_Store
+Thumbs.db
