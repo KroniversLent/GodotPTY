@@ -65,10 +65,13 @@ func _on_window_resized() -> void:
 
 # ── Keyboard input ────────────────────────────────────────────────────────────
 
-func _unhandled_key_input(event: InputEventKey) -> void:
-	if not event.pressed:
+func _unhandled_key_input(event: InputEvent) -> void:
+	if not event is InputEventKey:
 		return
-	var bytes := _key_to_bytes(event)
+	var key := event as InputEventKey
+	if not key.pressed:
+		return
+	var bytes := _key_to_bytes(key)
 	if bytes.size() > 0:
 		pty.write(bytes)
 		get_viewport().set_input_as_handled()
