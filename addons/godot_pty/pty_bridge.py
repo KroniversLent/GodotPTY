@@ -43,6 +43,10 @@ def main() -> None:
         # Child process: become the shell
         os.environ["TERM"]      = "xterm-256color"
         os.environ["COLORTERM"] = "truecolor"
+        # Ensure the shell and all child programs use UTF-8
+        for var in ("LANG", "LC_ALL", "LC_CTYPE"):
+            if not os.environ.get(var):
+                os.environ[var] = "en_US.UTF-8"
         os.execvp(shell, [shell])
         sys.exit(127)
 

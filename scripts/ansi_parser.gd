@@ -16,6 +16,10 @@ var _state: _State = _State.NORMAL
 var _params: String = ""
 var _intermediate: String = ""
 
+# UTF-8 multi-byte accumulator
+var _utf8_buf: PackedByteArray = PackedByteArray()
+var _utf8_left: int = 0  # continuation bytes still expected
+
 
 func feed(data: PackedByteArray) -> Array:
 	var actions: Array = []
@@ -29,6 +33,32 @@ func _process_byte(b: int, actions: Array) -> void:
 
 	match _state:
 		_State.NORMAL:
+			# ── UTF-8 multi-byte handling ────────────────────────────────────
+			if b >= 0xC0 and b <= 0xFD:
+				# Lead byte: start a new sequence
+				_utf8_buf = PackedByteArray([b])
+				if b < 0xE0:
+					_utf8_left = 1
+				elif b < 0xF0:
+					_utf8_left = 2
+				else:
+					_utf8_left = 3
+				return
+			if b >= 0x80 and b <= 0xBF:
+				# Continuation byte
+				if _utf8_left > 0:
+					_utf8_buf.append(b)
+					_utf8_left -= 1
+					if _utf8_left == 0:
+						var s := _utf8_buf.get_string_from_utf8()
+						for i in s.length():
+							actions.append({"type": "print", "char": s[i]})
+						_utf8_buf = PackedByteArray()
+				# Stray continuation with no lead — discard
+				return
+			# Any non-continuation byte resets a stale UTF-8 sequence
+			_utf8_left = 0
+			# ────────────────────────────────────────────────────────────────
 			match b:
 				0x1B: _state = _State.ESCAPE
 				0x0D: actions.append({"type": "cr"})
