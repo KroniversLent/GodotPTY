@@ -22,7 +22,8 @@ func _ready() -> void:
 	if shell == "":
 		shell = "/bin/bash"
 
-	var pid := pty.open(COLS, ROWS, shell)
+    var pid: int;
+	pid := pty.open(COLS, ROWS, shell)
 	if pid < 0:
 		push_error("PTY backend failed to start.")
 		return
