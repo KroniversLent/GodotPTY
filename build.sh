@@ -14,14 +14,12 @@ ADDON_DIR="$SCRIPT_DIR/addons/godot_pty"
 PLATFORM="${1:-linux}"
 TARGET="${2:-template_debug}"
 
-if [ ! -d "$ADDON_DIR/godot-cpp" ]; then
+if [ ! -f "$ADDON_DIR/godot-cpp/SConstruct" ]; then
     echo "==> Cloning godot-cpp (Godot 4.2 stable)..."
-    git clone --recurse-submodules \
+    rm -rf "$ADDON_DIR/godot-cpp"
+    git clone --depth 1 --branch godot-4.2-stable --recurse-submodules \
         https://github.com/godotengine/godot-cpp.git \
         "$ADDON_DIR/godot-cpp"
-    pushd "$ADDON_DIR/godot-cpp" > /dev/null
-    git checkout godot-4.2-stable
-    popd > /dev/null
 fi
 
 echo "==> Building for platform=$PLATFORM target=$TARGET ..."
