@@ -1,17 +1,6 @@
 #!/usr/bin/env python3
 """
-PTY bridge for GodotPTY.
-
-Forks a shell inside a real POSIX PTY (via Python's built-in pty module),
-then proxies raw bytes between that PTY and a TCP socket so Godot can talk
-to the shell using StreamPeerTCP.
-
-Usage (invoked automatically by pty_socket.gd):
-    python3 pty_bridge.py <port> <cols> <rows> <shell>
-
-Resize protocol (Godot → bridge, 6 bytes):
-    \x00 R <cols_hi> <cols_lo> <rows_hi> <rows_lo>
-Any other bytes are forwarded verbatim to the PTY master fd.
+Optimized PTY bridge for GodotPTY using TCP.
 """
 
 import fcntl
@@ -43,7 +32,6 @@ def main() -> None:
         # Child process: become the shell
         os.environ["TERM"]      = "xterm-256color"
         os.environ["COLORTERM"] = "truecolor"
-        # Ensure the shell and all child programs use UTF-8
         for var in ("LANG", "LC_ALL", "LC_CTYPE"):
             if not os.environ.get(var):
                 os.environ[var] = "en_US.UTF-8"
@@ -58,7 +46,7 @@ def main() -> None:
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     srv.bind(("127.0.0.1", port))
     srv.listen(1)
-    srv.settimeout(30)  # give Godot 30 s to connect
+    srv.settimeout(30)
 
     try:
         conn, _ = srv.accept()
@@ -71,50 +59,47 @@ def main() -> None:
     conn.setblocking(False)
 
     # ── 3. Proxy loop ─────────────────────────────────────────────────────────
-    # Partial resize-command buffer (6 bytes: \x00 R hi lo hi lo)
     resize_buf = bytearray()
     RESIZE_MAGIC = b"\x00R"
 
     try:
         while True:
+            # Use None for timeout to block until data is actually available.
+            # This eliminates the polling lag.
             try:
-                r, _, _ = select.select([master_fd, conn], [], [], 0.05)
-            except (ValueError, OSError):
+                r, _, _ = select.select([master_fd, conn], [], [])
+            except (ValueError, OSError, select.error):
                 break
 
             # PTY → Godot
             if master_fd in r:
                 try:
-                    data = os.read(master_fd, 4096)
+                    data = os.read(master_fd, 8192)
                     if not data:
                         break
                     conn.sendall(data)
                 except OSError:
                     break
 
-            # Godot → PTY (with resize-command detection)
+            # Godot → PTY
             if conn in r:
                 try:
-                    raw = conn.recv(4096)
+                    raw = conn.recv(8192)
                     if not raw:
                         break
                     resize_buf += raw
 
-                    # Drain the buffer, handling resize commands inline
                     while resize_buf:
                         idx = resize_buf.find(RESIZE_MAGIC)
                         if idx == -1:
-                            # No resize magic — forward everything
                             os.write(master_fd, bytes(resize_buf))
                             resize_buf.clear()
                             break
                         if idx > 0:
-                            # Forward bytes before the magic
                             os.write(master_fd, bytes(resize_buf[:idx]))
                             del resize_buf[:idx]
-                        # resize_buf now starts with \x00R
                         if len(resize_buf) < 6:
-                            break  # wait for remaining bytes
+                            break
                         _, _, ch, cl, rh, rl = resize_buf[:6]
                         del resize_buf[:6]
                         new_cols = (ch << 8) | cl

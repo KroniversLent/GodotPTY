@@ -1,28 +1,35 @@
 #!/usr/bin/env python
-"""
-SConstruct for the GodotPTY GDExtension.
-Run from addons/godot_pty/:
-    scons platform=linux target=template_debug
-"""
 import os
+import sys
 
-# Build godot-cpp and inherit its environment
-env = SConscript("godot-cpp/SConstruct")
+# Load variables (standard Godot GDExtension boilerplate)
+vars = Variables()
+vars.Add(EnumVariable("platform", "Target platform", sys.platform, allowed_values=("linux", "macos", "windows", "android", "ios", "web")))
+vars.Add(EnumVariable("target", "Compilation target", "template_debug", allowed_values=("template_debug", "template_release", "editor")))
+vars.Add(BoolVariable("use_llvm", "Use LLVM/Clang compiler", False))
+vars.Add(PathVariable("godot_cpp_path", "Path to godot-cpp", "godot-cpp", PathVariable.PathIsDir))
+
+env = Environment(variables=vars)
+
+# Load godot-cpp SConstruct
+# This will setup most of the environment flags (CPPPATH, LIBPATH, etc)
+SConscript(os.path.join(env["godot_cpp_path"], "SConstruct"), exports="env")
 
 # C++17 for std::thread / std::atomic
 env.Append(CXXFLAGS=["-std=c++17"])
-env.Append(CPPPATH=["src/"])
+env.Append(CPPPATH=["core/"])
 
 # PTY support requires linking against libutil on Linux
 if env["platform"] == "linux":
     env.Append(LIBS=["util"])
 
 sources = [
-    "src/register_types.cpp",
-    "src/pty_node.cpp",
+    "core/register_types.cpp",
+    "core/pty_node.cpp",
 ]
 
 # Output path mirrors the .gdextension [libraries] entries
+# env["suffix"] is automatically set by godot-cpp SConstruct
 lib_name = "libgodotpty{}{}".format(env["suffix"], env["SHLIBSUFFIX"])
 library = env.SharedLibrary("bin/" + lib_name, source=sources)
 

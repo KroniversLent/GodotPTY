@@ -1,26 +1,9 @@
-[gd_scene load_steps=4 format=3 uid="uid://bptyterm001"]
+[gd_scene load_steps=2 format=3 uid="uid://demo001"]
 
-[ext_resource type="Script" path="res://scripts/terminal.gd" id="1_term"]
-[ext_resource type="Script" path="res://scripts/terminal_screen.gd" id="2_screen"]
-[ext_resource type="Script" path="res://scripts/pty_socket.gd" id="3_pty"]
+[ext_resource type="PackedScene" uid="uid://bptyterm002" path="res://addons/godot_pty/ui/terminal.tscn" id="1_term"]
 
-[node name="Terminal" type="Control"]
-layout_mode = 3
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-script = ExtResource("1_term")
+[node name="Main" type="Node2D"]
 
-[node name="TerminalScreen" type="Control" parent="."]
-layout_mode = 1
-anchor_right = 0.0
-anchor_bottom = 0.0
-offset_right = 720.0
-offset_bottom = 360.0
-focus_mode = 2
-script = ExtResource("2_screen")
-
-[node name="PTYNode" type="Node" parent="."]
-script = ExtResource("3_pty")
+[node name="Terminal" parent="." instance=ExtResource("1_term")]
+offset_right = 800.0
+offset_bottom = 480.0

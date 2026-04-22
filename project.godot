@@ -14,14 +14,9 @@ config/name="GodotPTY"
 config/description="A PTY terminal emulator built with Godot 4 + GDExtension"
 config/version="1.0.0"
 run/main_scene="res://scenes/terminal.tscn"
-config/features=PackedStringArray("4.2", "Forward Plus")
+config/features=PackedStringArray("4.4", "Forward Plus")
 
 [display]
 
 window/size/viewport_width=800
 window/size/viewport_height=480
-window/size/resizable=true
-
-[rendering]
-
-renderer/rendering_method="forward_plus"
